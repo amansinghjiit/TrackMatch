@@ -3,9 +3,9 @@ FROM python:3.11-slim
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y \
-    wget curl unzip fonts-liberation libasound2 libatk-bridge2.0-0 libgtk-3-0 libgbm-dev libnss3 lsb-release
+    wget curl unzip fonts-liberation libasound2 libatk-bridge2.0-0 libgtk-3-0 libgbm-dev libnss3 lsb-release gnupg
 
-RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor > /usr/share/keyrings/google-chrome-keyring.gpg && \
+RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome-keyring.gpg && \
     echo "deb [signed-by=/usr/share/keyrings/google-chrome-keyring.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list && \
     apt-get update && apt-get install -y google-chrome-stable
 
