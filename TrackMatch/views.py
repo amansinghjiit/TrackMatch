@@ -29,7 +29,7 @@ def run_scraper():
     options.add_argument("--disable-gpu")
     options.add_argument("--disable-extensions")
     options.add_argument("--disable-infobars")
-    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--window-size=1280,720")
     options.add_argument("--blink-settings=imagesEnabled=false")
     options.page_load_strategy = "eager"
 
