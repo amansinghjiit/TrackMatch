@@ -4,7 +4,7 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y \
     chromium-driver \
-    chromium-browser \
+    chromium \
     wget \
     curl \
     libnss3 \
