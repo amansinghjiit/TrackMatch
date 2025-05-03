@@ -48,26 +48,34 @@ def run_scraper():
 
     try:
         driver.get(LOGIN_URL)
+
+        # Wait for login password field and enter password
         WebDriverWait(driver, TIMEOUT).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='password']"))
         ).send_keys(PASSWORD)
 
         driver.find_element(By.XPATH, "//button[contains(text(), 'Sign in')]").click()
 
+        # Wait for table to load after login
         WebDriverWait(driver, TIMEOUT).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, ".display.view-imeis-table tbody tr"))
         )
 
-        select_element = driver.find_element(By.CSS_SELECTOR, "select[name='DataTables_Table_0_length']")
-        driver.execute_script(
-            "arguments[0].value = '100'; arguments[0].dispatchEvent(new Event('change'))",
-            select_element
-        )
+        # Change items per page to 100
+        try:
+            select_element = driver.find_element(By.CSS_SELECTOR, "select[name='DataTables_Table_0_length']")
+            driver.execute_script(
+                "arguments[0].value = '100'; arguments[0].dispatchEvent(new Event('change'))",
+                select_element
+            )
 
-        WebDriverWait(driver, 5).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, ".display.view-imeis-table tbody tr"))
-        )
+            WebDriverWait(driver, 5).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, ".display.view-imeis-table tbody tr"))
+            )
+        except Exception:
+            logger.warning("Failed to change table length to 100; continuing with default")
 
+        # Scrape all table pages
         for page in range(MAX_PAGES):
             soup = BeautifulSoup(driver.page_source, "html.parser")
             rows = soup.select(".display.view-imeis-table tbody tr")
@@ -107,7 +115,6 @@ def run_scraper():
     finally:
         driver.quit()
 
-
 def run_scraper_with_retries(retries=3):
     for attempt in range(1, retries + 1):
         try:
@@ -128,7 +135,6 @@ def run_scraper_with_retries(retries=3):
             break
         time.sleep(2)
     return []
-
 
 class AsyncScraperView(View):
     async def get(self, request, *args, **kwargs):
