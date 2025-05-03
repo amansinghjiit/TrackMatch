@@ -1,5 +1,7 @@
 import os
+import time
 import logging
+import traceback
 from django.http import JsonResponse
 from django.views import View
 from selenium import webdriver
@@ -11,8 +13,8 @@ from selenium.webdriver.common.by import By
 from bs4 import BeautifulSoup
 from webdriver_manager.chrome import ChromeDriverManager
 from concurrent.futures import ThreadPoolExecutor
+from selenium.common.exceptions import WebDriverException
 import asyncio
-import traceback
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,14 @@ def run_scraper():
     options.add_argument("--disable-gpu")
     options.add_argument("--disable-extensions")
     options.add_argument("--disable-infobars")
+    options.add_argument("--disable-background-networking")
+    options.add_argument("--disable-background-timer-throttling")
+    options.add_argument("--disable-renderer-backgrounding")
+    options.add_argument("--disable-client-side-phishing-detection")
+    options.add_argument("--disable-popup-blocking")
+    options.add_argument("--metrics-recording-only")
+    options.add_argument("--no-first-run")
+    options.add_argument("--mute-audio")
     options.add_argument("--window-size=1280,720")
     options.add_argument("--blink-settings=imagesEnabled=false")
     options.page_load_strategy = "eager"
@@ -97,13 +107,36 @@ def run_scraper():
     finally:
         driver.quit()
 
+
+def run_scraper_with_retries(retries=3):
+    for attempt in range(1, retries + 1):
+        try:
+            logger.info(f"Scraper attempt {attempt}")
+            result = run_scraper()
+            if result:
+                return result
+        except WebDriverException as e:
+            if "tab crashed" in str(e).lower():
+                logger.warning("Chrome tab crashed. Retrying...")
+            else:
+                logger.error("WebDriver error (non-tab crash):")
+                logger.error(traceback.format_exc())
+                break
+        except Exception as e:
+            logger.error("Unexpected error during scraping:")
+            logger.error(traceback.format_exc())
+            break
+        time.sleep(2)
+    return []
+
+
 class AsyncScraperView(View):
     async def get(self, request, *args, **kwargs):
         loop = asyncio.get_running_loop()
 
         try:
-            with ThreadPoolExecutor(max_workers=5) as executor:
-                data = await loop.run_in_executor(executor, run_scraper)
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                data = await loop.run_in_executor(executor, run_scraper_with_retries)
 
             if data:
                 return JsonResponse({'status': 'success', 'data': data}, status=200)
@@ -112,4 +145,5 @@ class AsyncScraperView(View):
 
         except Exception as e:
             logger.error(f"View failed: {str(e)}")
+            logger.error(traceback.format_exc())
             return JsonResponse({'status': 'error', 'message': 'Internal server error'}, status=500)
