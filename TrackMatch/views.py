@@ -7,7 +7,7 @@ from django.views import View
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from bs4 import BeautifulSoup
@@ -18,59 +18,59 @@ import asyncio
 
 logger = logging.getLogger(__name__)
 
+
 def run_scraper():
     LOGIN_URL = os.getenv("SCRAPER_URL")
     PASSWORD = os.getenv("SCRAPER_PASSWORD")
     MAX_PAGES = int(os.getenv("MAX_PAGES", 5))
-    TIMEOUT = int(os.getenv("SELENIUM_TIMEOUT", 15))
+    TIMEOUT = int(os.getenv("SELENIUM_TIMEOUT", 20))
 
     options = Options()
     options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--disable-extensions")
-    options.add_argument("--disable-infobars")
-    options.add_argument("--disable-background-networking")
-    options.add_argument("--disable-background-timer-throttling")
-    options.add_argument("--disable-renderer-backgrounding")
-    options.add_argument("--disable-client-side-phishing-detection")
-    options.add_argument("--disable-popup-blocking")
-    options.add_argument("--metrics-recording-only")
-    options.add_argument("--no-first-run")
-    options.add_argument("--mute-audio")
-    options.add_argument("--window-size=1280,720")
-    options.add_argument("--blink-settings=imagesEnabled=false")
-    options.page_load_strategy = "eager"
+    options.add_argument("--window-size=1280,800")
+    options.page_load_strategy = "normal"
 
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    driver = webdriver.Chrome(
+        service=Service(ChromeDriverManager().install()),
+        options=options
+    )
+
     data = []
 
     try:
         driver.get(LOGIN_URL)
+
+        try:
+            password_input = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='password']"))
+            )
+            password_input.send_keys(PASSWORD)
+
+            driver.find_element(
+                By.XPATH,
+                "//button[contains(., 'Sign') or contains(., 'Login')]"
+            ).click()
+        except:
+            pass
+
         WebDriverWait(driver, TIMEOUT).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='password']"))
-        ).send_keys(PASSWORD)
-
-        driver.find_element(By.XPATH, "//button[contains(text(), 'Sign in')]").click()
-
-        WebDriverWait(driver, TIMEOUT).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, ".display.view-imeis-table tbody tr"))
+            EC.visibility_of_all_elements_located((By.CSS_SELECTOR, "table.display tbody tr"))
         )
 
-        select_element = driver.find_element(By.CSS_SELECTOR, "select[name='DataTables_Table_0_length']")
-        driver.execute_script(
-            "arguments[0].value = '100'; arguments[0].dispatchEvent(new Event('change'))",
-            select_element
-        )
+        time.sleep(2)
 
-        WebDriverWait(driver, 5).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, ".display.view-imeis-table tbody tr"))
-        )
+        try:
+            select_element = Select(driver.find_element(By.TAG_NAME, "select"))
+            select_element.select_by_visible_text("100")
+            time.sleep(2)
+        except:
+            pass
 
-        for page in range(MAX_PAGES):
+        for _ in range(MAX_PAGES):
             soup = BeautifulSoup(driver.page_source, "html.parser")
-            rows = soup.select(".display.view-imeis-table tbody tr")
+            rows = soup.select("table.display tbody tr")
 
             if not rows:
                 break
@@ -79,22 +79,25 @@ def run_scraper():
                 cols = row.find_all("td")
                 if len(cols) >= 6:
                     data.append({
-                        "date": cols[3].text.strip(),
-                        "product_name": cols[1].text.strip(),
-                        "price": cols[2].text.strip(),
-                        "tracking": cols[5].text.strip()
+                        "date": cols[3].get_text(strip=True),
+                        "product_name": cols[1].get_text(strip=True),
+                        "price": cols[2].get_text(strip=True),
+                        "tracking": cols[5].get_text(strip=True)
                     })
 
             try:
-                next_btn = driver.find_element(By.ID, "DataTables_Table_0_next")
-                if "disabled" in next_btn.get_attribute("class"):
+                next_btn = driver.find_element(
+                    By.XPATH,
+                    "//a[contains(@class,'next')]"
+                )
+
+                if "disabled" in next_btn.get_attribute("class").lower():
                     break
 
-                first_row = driver.find_element(By.CSS_SELECTOR, ".display.view-imeis-table tbody tr")
                 driver.execute_script("arguments[0].click();", next_btn)
-                WebDriverWait(driver, 3).until(EC.staleness_of(first_row))
+                time.sleep(2)
 
-            except Exception:
+            except:
                 break
 
         return data
@@ -119,11 +122,9 @@ def run_scraper_with_retries(retries=3):
             if "tab crashed" in str(e).lower():
                 logger.warning("Chrome tab crashed. Retrying...")
             else:
-                logger.error("WebDriver error (non-tab crash):")
                 logger.error(traceback.format_exc())
                 break
-        except Exception as e:
-            logger.error("Unexpected error during scraping:")
+        except Exception:
             logger.error(traceback.format_exc())
             break
         time.sleep(2)
