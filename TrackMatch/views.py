@@ -86,15 +86,12 @@ def run_scraper():
                     })
 
             try:
-                next_btn = driver.find_element(
-                    By.XPATH,
-                    "//a[contains(@class,'next')]"
-                )
-
-                if "disabled" in next_btn.get_attribute("class").lower():
+                next_li = driver.find_element(By.CSS_SELECTOR, "li.paginate_button.next")
+                if "disabled" in next_li.get_attribute("class").lower():
                     break
-
-                driver.execute_script("arguments[0].click();", next_btn)
+                
+                next_link = next_li.find_element(By.TAG_NAME, "a")
+                driver.execute_script("arguments[0].click();", next_link)
                 time.sleep(2)
 
             except:
@@ -142,7 +139,7 @@ class AsyncScraperView(View):
             if data:
                 return JsonResponse({'status': 'success', 'data': data}, status=200)
             else:
-                return JsonResponse({'status': 'error', 'message': 'No data found'}, status=404)
+                return JsonResponse({'status': 'error', 'message': 'Kuch data nahi mila'}, status=404)
 
         except Exception as e:
             logger.error(f"View failed: {str(e)}")
